@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A* Pathfinding</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    canvas {
+      border: 1px solid #000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="pathfindingCanvas" width="600" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById('pathfindingCanvas');
+    const ctx = canvas.getContext('2d');
+    const gridSize = 20;
+    const rows = canvas.height / gridSize;
+    const cols = canvas.width / gridSize;
+
+    // Represent the grid as a 2D array
+    const grid = new Array(rows).fill(0).map(() => new Array(cols).fill(0));
+
+    // Define start and end points
+    const start = { row: 2, col: 2 };
+    const end = { row: rows - 3, col: cols - 3 };
+
+    // Initialize the grid
+    function initializeGrid() {
+      for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols; j++) {
+          grid[i][j] = {
+            row: i,
+            col: j,
+            f: 0,
+            g: 0,
+            h: 0,
+            wall: false,
+            neighbors: [],
+            previous: undefined,
+          };
+        }
+      }
+    }
+
+    // Draw the grid on the canvas
+    function drawGrid() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols; j++) {
+          const cell = grid[i][j];
+          ctx.beginPath();
+          ctx.rect(j * gridSize, i * gridSize, gridSize, gridSize);
+          ctx.fillStyle = cell.wall ? '#222' : '#eee';
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Draw the start and end points
+    function drawPoints() {
+      ctx.beginPath();
+      ctx.arc(start.col * gridSize + gridSize / 2, start.row * gridSize + gridSize / 2, gridSize / 3, 0, 2 * Math.PI);
+      ctx.fillStyle = 'green';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(end.col * gridSize + gridSize / 2, end.row * gridSize + gridSize / 2, gridSize / 3, 0, 2 * Math.PI);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+    }
+
+    // Calculate heuristic (Manhattan distance)
+    function heuristic(a, b) {
+      return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
+    }
+
+    // Get neighbors for a given cell
+    function getNeighbors(cell) {
+      const neighbors = [];
+      const { row, col } = cell;
+
+      if (row > 0) neighbors.push(grid[row - 1][col]);
+      if (row < rows - 1) neighbors.push(grid[row + 1][col]);
+      if (col > 0) neighbors.push(grid[row][col - 1]);
+      if (col < cols - 1) neighbors.push(grid[row][col + 1]);
+
+      return neighbors.filter(neighbor => !neighbor.wall);
+    }
+
+    // A* algorithm
+    function aStar() {
+      const openSet = [grid[start.row][start.col]];
+      const closedSet = [];
+
+      while (openSet.length > 0) {
+        let current = openSet[0];
+
+        // Find the node with the lowest total cost
+        openSet.forEach(node => {
+          if (node.f < current.f || (node.f === current.f && node.h < current.h)) {
+            current = node;
+          }
+        });
+
+        // Remove the current node from the open set
+        openSet.splice(openSet.indexOf(current), 1);
+        closedSet.push(current);
+
+        // If the current node is the end node, reconstruct the path
+        if (current === grid[end.row][end.col]) {
+          reconstructPath();
+          return;
+        }
+
+        // Explore neighbors
+        const neighbors = getNeighbors(current);
+        neighbors.forEach(neighbor => {
+          if (!closedSet.includes(neighbor)) {
+            const tentativeG = current.g + 1;
+
+            if (!openSet.includes(neighbor) || tentativeG < neighbor.g) {
+              neighbor.g = tentativeG;
+              neighbor.h = heuristic(neighbor, grid[end.row][end.col]);
+              neighbor.f = neighbor.g + neighbor.h;
+              neighbor.previous = current;
+
+              if (!openSet.includes(neighbor)) {
+                openSet.push(neighbor);
+              }
+            }
+          }
+        });
+      }
+
+      // If openSet is empty and we haven't reached the end, no path exists
+      console.log('No path found');
+    }
+
+    // Reconstruct the path and draw it on the canvas
+    function reconstructPath() {
+      let current = grid[end.row][end.col];
+      const path = [current];
+
+      while (current.previous) {
+        path.push(current.previous);
+        current = current.previous;
+      }
+
+      // Draw the path
+      ctx.beginPath();
+      ctx.moveTo(path[0].col * gridSize + gridSize / 2, path[0].row * gridSize + gridSize / 2);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].col * gridSize + gridSize / 2, path[i].row * gridSize + gridSize / 2);
+      }
+      ctx.strokeStyle = 'blue';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
+
+    // Handle mouse events to draw walls
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+
+    let isDrawing = false;
+
+    function handleMouseDown(event) {
+      isDrawing = true;
+      updateCell(event);
+    }
+
+    function handleMouseMove(event) {
+      if (isDrawing) {
+        updateCell(event);
+      }
+    }
+
+    function handleMouseUp() {
+      isDrawing = false;
+    }
+
+    function updateCell(event) {
+      const mouseX = event.clientX - canvas.getBoundingClientRect().left;
+      const mouseY = event.clientY - canvas.getBoundingClientRect().top;
+
+      const col = Math.floor(mouseX / gridSize);
+      const row = Math.floor(mouseY / gridSize);
+
+      if (grid[row] && grid[row][col]) {
+        grid[row][col].wall = !grid[row][col].wall;
+        drawGrid();
+        drawPoints();
+        if (start.row !== end.row || start.col !== end.col) {
+          aStar();
+        }
+      }
+    }
+
+    // Initialize the grid, draw the points, and perform A* algorithm
+    function initialize() {
+      initializeGrid();
+      drawGrid();
+      drawPoints();
+aStar();
+}
+
+// Call the initialize function
+initialize();
+
+  </script>
+</body>
+</html>
